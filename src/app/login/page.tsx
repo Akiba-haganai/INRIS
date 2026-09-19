@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { Suspense, useState, type FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Card, CardBody } from '@/components/ui/Card'
 import { InlineAlert } from '@/components/ui/InlineAlert'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
   const next = params.get('next') || '/staff'
@@ -130,5 +130,17 @@ export default function LoginPage() {
         sign-up.
       </p>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="mx-auto mt-8 max-w-md text-center p-8">
+        <p className="text-sm text-slate-500">Loading…</p>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }
