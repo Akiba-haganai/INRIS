@@ -34,6 +34,4 @@ Next.js, Supabase (Postgres), and an OpenAI-compatible chat endpoint — no
 custom ML training, no bespoke infrastructure.
 
 ## C-08 — Time
-The MVP is built to fit within the three-month build-and-test programme. Further
-work — embeddings/vector search, authentication with roles, official guidance
-integration, evaluation harness — is deferred to later stages.
+The MVP is built to fit within the three-month build-and-test programme. Some complex integrations (e.g. real government APIs, advanced evaluation harnesses) are deferred to later stages.

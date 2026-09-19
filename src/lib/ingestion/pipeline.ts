@@ -108,8 +108,29 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       return { documentId: doc.id, status: 'failed', chunkCount: 0, message: embeddingError }
     }
 
+    // 4. Create the canonical `guidance` row FIRST, so chunks can link to it.
+    // It starts in 'draft' status (not 'approved') and is unverified.
+    const { data: guidanceData, error: guidanceError } = await supabase.from('guidance').insert({
+      title,
+      category,
+      content: text.slice(0, GUIDANCE_CONTENT_PREVIEW_CHARS),
+      source: `Uploaded document: ${input.filename}`,
+      document_id: doc.id,
+      version: '1',
+      status: 'draft',
+      last_verified: null, // explicitly unverified until reviewed
+    }).select('id').single()
+
+    if (guidanceError) {
+      throw new Error(`Failed to create linked guidance row: ${guidanceError.message}`)
+    }
+
+    const guidanceId = guidanceData.id
+
+    // 5. Insert chunks linked to both document and guidance
     const rows = chunks.map((c, i) => ({
       document_id: doc.id,
+      guidance_id: guidanceId,
       chunk_index: c.index,
       content: c.content,
       token_count: c.tokenCount,
@@ -125,6 +146,8 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
         status: 'failed',
         error_message: `Chunk insert failed: ${chunkError.message}`,
       })
+      // Cleanup guidance since chunks failed
+      await supabase.from('guidance').delete().eq('id', guidanceId)
       return { documentId: doc.id, status: 'failed', chunkCount: 0 }
     }
 
@@ -133,31 +156,6 @@ export async function ingestDocument(input: IngestInput): Promise<IngestResult> 
       processed_at: new Date().toISOString(),
       metadata: { page_count: pageCount, chunk_count: chunks.length },
     })
-
-    // FIX: previously ingestion only wrote to `documents` +
-    // `guidance_chunks`. It never created a row in the canonical
-    // `guidance` table, so uploaded documents were searchable by chat
-    // (vector search) but invisible on the public Guidance Library page
-    // (FR-11) and never got the version/status/effective_date/verified
-    // lifecycle fields the assignment asks for (Section 9). This closes
-    // that gap by creating one linked, lifecycle-tagged `guidance` row
-    // per successfully-ingested document. Full text stays searchable via
-    // guidance_chunks; this row is the library-facing summary copy.
-    const { error: guidanceError } = await supabase.from('guidance').insert({
-      title,
-      category,
-      content: text.slice(0, GUIDANCE_CONTENT_PREVIEW_CHARS),
-      source: `Uploaded document: ${input.filename}`,
-      document_id: doc.id,
-      version: '1',
-      status: 'approved',
-      last_verified: new Date().toISOString(),
-    })
-    if (guidanceError) {
-      // Don't fail the whole ingest over this — the chunks/vectors are
-      // already good and chat retrieval still works. Just surface it.
-      console.error('[ingestion] failed to create linked guidance row:', guidanceError.message)
-    }
 
     return { documentId: doc.id, status: 'ready', chunkCount: chunks.length }
   } catch (err) {

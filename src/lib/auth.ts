@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
+// In production/staging, AUTH_ENABLED is essentially forced to true by the logic below,
+// but we keep reading the flag for the dev-mode bypass.
 const AUTH_ENABLED = process.env.NEXT_PUBLIC_AUTH_ENABLED === 'true'
 
 export interface AppUser {
@@ -10,7 +12,7 @@ export interface AppUser {
   full_name: string | null
 }
 
-// Development placeholder used while AUTH_ENABLED=false.
+// Development placeholder used while AUTH_ENABLED=false in development ONLY.
 const DEV_USER: AppUser = {
   id: '00000000-0000-0000-0000-000000000000',
   email: 'dev@localhost',
@@ -18,8 +20,12 @@ const DEV_USER: AppUser = {
   full_name: 'Development User',
 }
 
+function shouldUseDevBypass() {
+  return process.env.NODE_ENV === 'development' && !AUTH_ENABLED
+}
+
 export async function getCurrentUser(): Promise<AppUser | null> {
-  if (!AUTH_ENABLED) return DEV_USER
+  if (shouldUseDevBypass()) return DEV_USER
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +41,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
 }
 
 export async function requireStaffPage(): Promise<AppUser> {
-  if (!AUTH_ENABLED) return DEV_USER
+  if (shouldUseDevBypass()) return DEV_USER
   const user = await getCurrentUser()
   if (!user || (user.role !== 'staff' && user.role !== 'admin')) {
     redirect('/login?next=/staff')
@@ -44,11 +50,11 @@ export async function requireStaffPage(): Promise<AppUser> {
 }
 
 export async function requireStaffApi(): Promise<AppUser | null> {
-  if (!AUTH_ENABLED) return DEV_USER
+  if (shouldUseDevBypass()) return DEV_USER
   const user = await getCurrentUser()
   if (!user) return null
   if (user.role !== 'staff' && user.role !== 'admin') return null
   return user
 }
 
-export const isAuthEnabled = () => AUTH_ENABLED
+export const isAuthEnabled = () => !shouldUseDevBypass()

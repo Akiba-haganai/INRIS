@@ -21,6 +21,7 @@ const NO_KB_MESSAGE =
 // grounding is read from an explicit field instead of guessed from text.
 const chatOutputSchema = z.object({
   sufficient: z.boolean(),
+  reason: z.string().optional(),
   answer: z.string(),
 })
 
@@ -70,10 +71,30 @@ export async function POST(req: Request) {
     })
   }
 
-  // ---- 1. Retrieve guidance ------------------------------------------
+  // ---- 1. Check for pure greetings --------------------------------------
+  const lowerQ = question.trim().toLowerCase()
+  const GREETINGS = new Set(['hi', 'hello', 'hey', 'greetings', 'help', 'what can you do', 'what can you do?'])
+  if (history.length === 0 && GREETINGS.has(lowerQ)) {
+    return NextResponse.json({
+      answer: "Hello! I'm the INRIS Passport Assistant. I can help you with questions about passport applications, renewals, lost documents, and fees. What do you need help with?",
+      grounded: true, // It's an application-level response
+      sources: [],
+      reason: 'GREETING',
+    })
+  }
+
+  // ---- 2. Contextual retrieval ------------------------------------------
+  // We want follow-ups like "What about the fee?" to be searched with the context
+  // of the conversation, not just the isolated string.
+  const recentUserMessages = history
+    .filter(m => m.role === 'user')
+    .slice(-2)
+    .map(m => m.content)
+  const searchContext = [...recentUserMessages, question].join('\n')
+
   let guidance
   try {
-    guidance = await retrieveGuidance(question, 4)
+    guidance = await retrieveGuidance(searchContext, 4)
   } catch (err) {
     console.error('[api/chat] retrieval failed:', err)
     return NextResponse.json(
@@ -87,7 +108,7 @@ export async function POST(req: Request) {
     )
   }
 
-  // ---- 2. Was there anything to retrieve? -----------------------------
+  // ---- 3. Was there anything to retrieve? -----------------------------
   // Distinguish "empty knowledge base" from "no match for this question".
   // If the entire knowledge base is empty, that's a system state, not a
   // question-specific refusal. We say so explicitly.
@@ -102,18 +123,20 @@ export async function POST(req: Request) {
         .eq('status', 'approved')
       kbEmpty = (count ?? 0) === 0
     } catch {
-      // If the count fails, assume not empty — fall through to the standard refusal.
+      // If the count fails, assume not empty
     }
 
-    return NextResponse.json({
-      answer: kbEmpty ? NO_KB_MESSAGE : INSUFFICIENT_INFO_MESSAGE,
-      grounded: false,
-      sources: [],
-      reason: kbEmpty ? 'EMPTY_KB' : 'NO_MATCH',
-    })
+    if (kbEmpty) {
+      return NextResponse.json({
+        answer: NO_KB_MESSAGE,
+        grounded: false,
+        sources: [],
+        reason: 'EMPTY_KB',
+      })
+    }
   }
 
-  // ---- 3. Generate -----------------------------------------------------
+  // ---- 4. Generate -----------------------------------------------------
   const context = formatGuidanceContext(guidance)
 
   // FIX: the user's own question previously went to the AI provider
@@ -170,7 +193,7 @@ export async function POST(req: Request) {
             last_verified: g.last_verified,
           }))
         : [],
-      reason: output.sufficient ? 'GROUNDED' : 'MODEL_REFUSED',
+      reason: output.sufficient ? 'GROUNDED' : (output.reason || 'MODEL_REFUSED'),
     })
   } catch (err) {
     console.error('[api/chat] generation failed:', err)

@@ -4,7 +4,10 @@ import { updateSession } from '@/lib/supabase/middleware'
 const AUTH_ENABLED = process.env.NEXT_PUBLIC_AUTH_ENABLED === 'true'
 
 export async function proxy(request: NextRequest) {
-  if (!AUTH_ENABLED) return NextResponse.next()
+  const isDev = process.env.NODE_ENV === 'development'
+  if (isDev && !AUTH_ENABLED) {
+    return NextResponse.next()
+  }
 
   const { response, user } = await updateSession(request)
   const { pathname } = request.nextUrl

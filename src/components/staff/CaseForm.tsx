@@ -20,9 +20,27 @@ export function CaseForm() {
     setSubmitting(true)
 
     const fd = new FormData(e.currentTarget)
+    
+    // Combine structured fields into the description
+    const goal = String(fd.get('goal') || '').trim()
+    const issue = String(fd.get('issue') || '').trim()
+    const stage = String(fd.get('stage') || '').trim()
+    const info = String(fd.get('info') || '').trim()
+    const missing = String(fd.get('missing') || '').trim()
+    const notes = String(fd.get('notes') || '').trim()
+    
+    const description = [
+      `**Applicant Goal**: ${goal || 'Not specified'}`,
+      `**Core Issue**: ${issue || 'Not specified'}`,
+      `**Current Stage**: ${stage || 'Not specified'}`,
+      `**Available Information/Documents**: ${info || 'None specified'}`,
+      `**Missing Information**: ${missing || 'None specified'}`,
+      `**Staff Notes**: ${notes || 'None'}`
+    ].join('\n\n')
+
     const payload = {
       category: String(fd.get('category') || ''),
-      description: String(fd.get('description') || ''),
+      description,
       priority: String(fd.get('priority') || 'normal'),
     }
 
@@ -38,11 +56,6 @@ export function CaseForm() {
         return
       }
       setOpen(false)
-      // FIX: this used to just close the form and silently refresh the
-      // list — no confirmation the case was actually created, no visible
-      // moment showing its new INRIS-##### number unless the user spotted
-      // it themselves in the list. Landing on the case's own detail page
-      // is the confirmation: the number is right there in the header.
       router.push(`/staff/cases/${data.case.id}`)
     } catch {
       setError('Network error. Please try again.')
@@ -63,7 +76,7 @@ export function CaseForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full space-y-4 rounded-xl border border-border bg-surface p-4 shadow-sm md:max-w-xl md:p-5"
+      className="w-full space-y-4 rounded-xl border border-border bg-surface p-4 shadow-sm md:max-w-2xl md:p-5"
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
@@ -101,17 +114,31 @@ export function CaseForm() {
         </div>
       </div>
 
-      <div>
-        <label className="mb-1 block text-xs font-medium text-slate-600">
-          Description
-        </label>
-        <Textarea
-          name="description"
-          required
-          minLength={10}
-          rows={4}
-          placeholder="Describe the case. Do not enter real citizen data — use structured test records during development."
-        />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">What is the applicant trying to do?</label>
+          <Textarea name="goal" required rows={2} placeholder="e.g., Renew passport, replace lost ID..." />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">What happened / what is the issue?</label>
+          <Textarea name="issue" required rows={2} placeholder="e.g., Application rejected, missing birth certificate..." />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">What stage is the case currently at?</label>
+          <Textarea name="stage" rows={2} placeholder="e.g., Intake, pending review, waiting for docs..." />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">What information or documents are available?</label>
+          <Textarea name="info" rows={2} placeholder="e.g., Provided police report, expired passport..." />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">What information appears to be missing?</label>
+          <Textarea name="missing" rows={2} placeholder="e.g., Needs recent photo, fee payment..." />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Additional staff notes</label>
+          <Textarea name="notes" rows={2} placeholder="Any other context..." />
+        </div>
       </div>
 
       {error && <InlineAlert tone="error">{error}</InlineAlert>}
