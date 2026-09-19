@@ -60,15 +60,16 @@ export function CaseStatusControls({
             onClick={() => update(s)}
             disabled={active || !!loading}
             className={cn(
-              'focus-ring touch-target inline-flex items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors',
+              'focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors',
+              'h-11 md:h-8', // 44px on mobile, 32px on desktop
               active
-                ? 'bg-brand-700 text-white'
+                ? 'bg-brand-700 text-white shadow-sm'
                 : 'border border-border bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700',
               loading && loading !== s && 'opacity-60',
               'disabled:cursor-default'
             )}
           >
-            {loading === s && <Loader2 className="h-3 w-3 animate-spin" />}
+            {loading === s && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
             {LABELS[s] ?? s}
           </button>
         )

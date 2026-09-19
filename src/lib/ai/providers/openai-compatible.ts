@@ -17,9 +17,7 @@ export class OpenAICompatibleProvider implements AIProvider {
       model: process.env.AI_MODEL || 'deepseek-chat',
       temperature: options.temperature ?? 0.2,
       max_tokens: options.maxOutputTokens ?? 900,
-      ...(options.jsonMode
-        ? { response_format: { type: 'json_object' as const } }
-        : {}),
+      ...(options.jsonMode ? { response_format: { type: 'json_object' as const } } : {}),
       messages: [
         { role: 'system', content: options.system },
         ...options.messages.map((m) => ({
@@ -34,10 +32,23 @@ export class OpenAICompatibleProvider implements AIProvider {
     return text
   }
 
-  async embed(): Promise<number[][]> {
-    throw new Error(
-      'Embeddings are not configured on the openai-compatible fallback provider. ' +
-        'Set AI_PROVIDER=gemini or add an embedding implementation.'
-    )
+  async embed(texts: string[]): Promise<number[][]> {
+    if (texts.length === 0) return []
+
+    const model = process.env.AI_EMBEDDING_MODEL
+    if (!model) {
+      throw new Error(
+        'AI_EMBEDDING_MODEL is not set. The openai-compatible provider needs an ' +
+          'embedding model name to call the /embeddings endpoint on AI_BASE_URL. ' +
+          'The model must produce vectors matching EMBEDDING_DIMENSIONS (default 1536).'
+      )
+    }
+
+    const response = await this.client.embeddings.create({
+      model,
+      input: texts,
+    })
+
+    return response.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
   }
 }

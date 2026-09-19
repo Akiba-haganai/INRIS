@@ -34,6 +34,7 @@ export function InlineAlert({
   return (
     <div
       role={tone === 'error' ? 'alert' : 'status'}
+      aria-live={tone === 'error' ? 'assertive' : 'polite'}
       className={cn(
         'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs',
         t.wrapper

@@ -10,6 +10,7 @@ import { Loader2, AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react'
 
 interface Analysis {
   id: string
+  case_type: string | null
   summary: string
   issues: string[]
   missing_information: string[]
@@ -20,10 +21,7 @@ interface Analysis {
 }
 
 interface GuidanceRef {
-  id: string
-  title: string
-  category: string
-  source: string
+  id: string; title: string; category: string; source: string
 }
 
 export function CaseAnalysis({
@@ -83,9 +81,7 @@ export function CaseAnalysis({
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600">
               <Sparkles className="h-5 w-5" />
             </div>
-            <p className="text-sm font-medium text-foreground">
-              No analysis yet
-            </p>
+            <p className="text-sm font-medium text-foreground">No analysis yet</p>
             <p className="mt-1 max-w-sm text-xs text-slate-500">
               Run the analysis to generate a structured summary, missing
               information, and a suggested next step grounded in the knowledge
@@ -107,6 +103,11 @@ export function CaseAnalysis({
         {analysis && (
           <>
             <div className="flex flex-wrap items-center gap-3 text-xs">
+              {analysis.case_type && (
+                <span className="inline-flex items-center rounded-full bg-brand-50 px-2.5 py-1 font-medium text-brand-800">
+                  {analysis.case_type}
+                </span>
+              )}
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium ${
                   analysis.human_review_required
@@ -119,9 +120,7 @@ export function CaseAnalysis({
                 ) : (
                   <CheckCircle2 className="h-3 w-3" />
                 )}
-                {analysis.human_review_required
-                  ? 'Human review required'
-                  : 'No review flagged'}
+                {analysis.human_review_required ? 'Human review required' : 'No review flagged'}
               </span>
               <span className="text-slate-500">
                 Confidence{' '}
@@ -134,9 +133,7 @@ export function CaseAnalysis({
             <Field label="Summary">{analysis.summary}</Field>
 
             {analysis.issues.length > 0 && (
-              <Field label="Key issues">
-                <BulletList items={analysis.issues} />
-              </Field>
+              <Field label="Key issues"><BulletList items={analysis.issues} /></Field>
             )}
 
             {analysis.missing_information.length > 0 && (
@@ -145,21 +142,14 @@ export function CaseAnalysis({
               </Field>
             )}
 
-            <Field label="Suggested next step">
-              {analysis.suggested_action}
-            </Field>
+            <Field label="Suggested next step">{analysis.suggested_action}</Field>
 
             {guidance.length > 0 && (
               <Field label="Relevant guidance">
                 <ul className="space-y-1">
                   {guidance.map((g) => (
-                    <li
-                      key={g.id}
-                      className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-slate-600"
-                    >
-                      <span className="font-medium text-slate-800">
-                        {g.title}
-                      </span>
+                    <li key={g.id} className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-slate-600">
+                      <span className="font-medium text-slate-800">{g.title}</span>
                       <span className="text-slate-400">·</span>
                       <span className="text-slate-500">{g.category}</span>
                     </li>
@@ -174,13 +164,7 @@ export function CaseAnalysis({
   )
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">

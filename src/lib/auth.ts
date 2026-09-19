@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true'
+const AUTH_ENABLED = process.env.NEXT_PUBLIC_AUTH_ENABLED === 'true'
 
 export interface AppUser {
   id: string

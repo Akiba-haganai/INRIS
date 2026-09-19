@@ -1,27 +1,15 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { CaseAnalysisOutput } from '@/lib/validations'
 
-// ---------- Types ----------------------------------------------------
 export interface CaseRow {
-  id: string
-  case_number: string
-  category: string
-  description: string
-  status: string
-  priority: string
-  created_at: string
-  updated_at: string
+  id: string; case_number: string; category: string; description: string
+  status: string; priority: string; created_at: string; updated_at: string
 }
 
 export interface AnalysisRow {
-  id: string
-  case_id: string
-  summary: string
-  issues: string[]
-  missing_information: string[]
-  suggested_action: string
-  confidence: number
-  human_review_required: boolean
+  id: string; case_id: string; case_type: string | null; summary: string
+  issues: string[]; missing_information: string[]; relevant_guidance: string[]
+  suggested_action: string; confidence: number; human_review_required: boolean
   created_at: string
 }
 
@@ -30,26 +18,20 @@ export interface CaseWithAnalysis extends CaseRow {
 }
 
 export interface ListCasesFilters {
-  status?: string
-  category?: string
-  search?: string
-  needs_review?: boolean
-  limit?: number
+  status?: string; category?: string; search?: string
+  needs_review?: boolean; limit?: number
 }
 
 export interface CaseStats {
-  total: number
-  open: number
-  resolved: number
-  needs_review: number
+  total: number; open: number; resolved: number; needs_review: number
   by_category: { category: string; count: number }[]
   common_issues: { issue: string; count: number }[]
 }
 
-// ---------- Queries --------------------------------------------------
-export async function listCases(
-  filters: ListCasesFilters = {}
-): Promise<CaseRow[]> {
+const ANALYSIS_COLUMNS =
+  'id, case_id, case_type, summary, issues, missing_information, relevant_guidance, suggested_action, confidence, human_review_required, created_at'
+
+export async function listCases(filters: ListCasesFilters = {}): Promise<CaseRow[]> {
   const supabase = createAdminClient()
   let q = supabase
     .from('cases')
@@ -83,22 +65,16 @@ export async function getCase(id: string): Promise<CaseWithAnalysis | null> {
 
   const { data: analyses } = await supabase
     .from('case_analysis')
-    .select('id, case_id, summary, issues, missing_information, suggested_action, confidence, human_review_required, created_at')
+    .select(ANALYSIS_COLUMNS)
     .eq('case_id', id)
     .order('created_at', { ascending: false })
     .limit(1)
 
-  return {
-    ...caseRow,
-    latest_analysis: analyses?.[0] ?? null,
-  }
+  return { ...caseRow, latest_analysis: analyses?.[0] ?? null }
 }
 
 export async function createCase(input: {
-  category: string
-  description: string
-  priority?: string
-  status?: string
+  category: string; description: string; priority?: string; status?: string
 }): Promise<CaseRow> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
@@ -141,21 +117,22 @@ export async function saveAnalysis(
     .from('case_analysis')
     .insert({
       case_id: caseId,
+      case_type: output.case_type,
       summary: output.summary,
       issues: output.key_issues,
       missing_information: output.missing_information,
+      relevant_guidance: output.relevant_guidance,
       suggested_action: output.suggested_next_step,
       confidence: output.confidence,
       human_review_required: output.human_review_required,
     })
-    .select('id, case_id, summary, issues, missing_information, suggested_action, confidence, human_review_required, created_at')
+    .select(ANALYSIS_COLUMNS)
     .single()
 
   if (error) throw new Error(`saveAnalysis failed: ${error.message}`)
   return data
 }
 
-// ---------- Stats ----------------------------------------------------
 export async function getCaseStats(): Promise<CaseStats> {
   const supabase = createAdminClient()
 
@@ -168,14 +145,10 @@ export async function getCaseStats(): Promise<CaseStats> {
 
   const total = rows.length
   const open = rows.filter((r) => r.status === 'open' || r.status === 'in_review').length
-  const resolved = rows.filter(
-    (r) => r.status === 'resolved' || r.status === 'closed'
-  ).length
+  const resolved = rows.filter((r) => r.status === 'resolved' || r.status === 'closed').length
 
   const byCategory = new Map<string, number>()
-  for (const r of rows) {
-    byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + 1)
-  }
+  for (const r of rows) byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + 1)
   const by_category = [...byCategory.entries()]
     .map(([category, count]) => ({ category, count }))
     .sort((a, b) => b.count - a.count)
@@ -191,11 +164,7 @@ export async function getCaseStats(): Promise<CaseStats> {
     .in('case_id', ids)
     .order('created_at', { ascending: false })
 
-  // Keep only the latest analysis per case
-  const latest = new Map<
-    string,
-    { issues: string[]; human_review_required: boolean; confidence: number }
-  >()
+  const latest = new Map<string, { issues: string[]; human_review_required: boolean; confidence: number }>()
   for (const a of analyses ?? []) {
     if (!latest.has(a.case_id)) {
       latest.set(a.case_id, {
@@ -208,7 +177,7 @@ export async function getCaseStats(): Promise<CaseStats> {
 
   const needs_review = rows.filter((r) => {
     const a = latest.get(r.id)
-    if (!a) return true // never analysed → needs review
+    if (!a) return true
     return a.human_review_required || a.confidence < 0.7
   }).length
 

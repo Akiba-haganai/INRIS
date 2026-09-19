@@ -40,16 +40,16 @@ export function Sheet({
   if (!open) return null
 
   const slideClasses = {
-    right:  'inset-y-0 right-0 w-[min(85vw,20rem)] translate-x-0',
-    left:   'inset-y-0 left-0  w-[min(85vw,20rem)] translate-x-0',
-    bottom: 'inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl',
+    right:  'inset-y-0 right-0 w-[min(85vw,20rem)] animate-slide-right',
+    left:   'inset-y-0 left-0  w-[min(85vw,20rem)] animate-slide-left',
+    bottom: 'inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl animate-slide-bottom',
   }[side]
 
   return (
     <div className="fixed inset-0 z-50 md:hidden">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
         aria-hidden
       />
@@ -61,7 +61,6 @@ export function Sheet({
         aria-label={title || 'Menu'}
         className={cn(
           'absolute bg-white shadow-xl',
-          'animate-in',
           slideClasses,
           side !== 'bottom' && 'flex flex-col'
         )}

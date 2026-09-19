@@ -92,13 +92,15 @@ export function ChatBox() {
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               {SUGGESTIONS.map((s) => (
-                <button
+                <Button
                   key={s.label}
+                  variant="secondary"
+                  size="sm"
                   onClick={() => send(s.q)}
-                  className="focus-ring touch-target inline-flex items-center rounded-full border border-border bg-white px-3.5 text-xs font-medium text-slate-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800"
+                  className="rounded-full"
                 >
                   {s.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>

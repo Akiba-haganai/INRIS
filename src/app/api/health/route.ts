@@ -7,15 +7,30 @@ export const runtime = 'nodejs'
 export async function GET() {
   const checks: Record<string, { ok: boolean; detail?: string }> = {}
 
-  // Supabase
+  // Supabase Anon
   try {
     const supabase = await createClient()
     const { error } = await supabase.from('guidance').select('id').limit(1)
-    checks.supabase = error
+    checks.supabase_anon = error
       ? { ok: false, detail: error.message }
       : { ok: true }
   } catch (err) {
-    checks.supabase = {
+    checks.supabase_anon = {
+      ok: false,
+      detail: err instanceof Error ? err.message : 'unknown',
+    }
+  }
+
+  // Supabase Service Role
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const admin = createAdminClient()
+    const { error } = await admin.from('guidance').select('id').limit(1)
+    checks.supabase_service_role = error
+      ? { ok: false, detail: error.message }
+      : { ok: true }
+  } catch (err) {
+    checks.supabase_service_role = {
       ok: false,
       detail: err instanceof Error ? err.message : 'unknown',
     }

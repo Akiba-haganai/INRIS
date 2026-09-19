@@ -11,23 +11,11 @@ import { getCase, saveAnalysis } from '@/lib/cases'
 import { writeAuditLog } from '@/lib/audit'
 import { redactText } from '@/lib/redact'
 import { requireStaffApi } from '@/lib/auth'
+import { extractJsonObject } from '@/lib/ai/json'
 
 export const runtime = 'nodejs'
 
 const requestSchema = z.object({ case_id: z.string().uuid() })
-
-/** Extract the first JSON object from a model reply, tolerating code fences. */
-function extractJsonObject(text: string): unknown {
-  let t = text.trim()
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fence) t = fence[1].trim()
-  const start = t.indexOf('{')
-  const end = t.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error('No JSON object found in model reply.')
-  }
-  return JSON.parse(t.slice(start, end + 1))
-}
 
 export async function POST(req: Request) {
   const user = await requireStaffApi()
@@ -55,16 +43,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Case not found.' }, { status: 404 })
     }
 
-    // ---- retrieve approved guidance relevant to the case -------------
     const query = `${caseRow.category} ${caseRow.description}`
     const guidance = await retrieveGuidance(query, 5)
     const context = guidance.length
       ? formatGuidanceContext(guidance)
       : '(no matching approved guidance found)'
 
-    // ---- redact before sending to the model -----------------------------
     const redaction = redactText(caseRow.description)
-
     const provider = getProvider()
 
     let raw: string
@@ -72,10 +57,7 @@ export async function POST(req: Request) {
       raw = await provider.generate({
         system: CASE_ANALYSIS_SYSTEM_PROMPT,
         messages: [
-          {
-            role: 'system',
-            content: `APPROVED GUIDANCE CONTEXT:\n\n${context}`,
-          },
+          { role: 'system', content: `APPROVED GUIDANCE CONTEXT:\n\n${context}` },
           {
             role: 'user',
             content: [
@@ -99,30 +81,30 @@ export async function POST(req: Request) {
       )
     }
 
-    // ---- parse + validate --------------------------------------------
     const json = extractJsonObject(raw)
     const validated = caseAnalysisOutputSchema.safeParse(json)
     if (!validated.success) {
       console.error('[api/cases/analyze] schema mismatch:', validated.error.flatten())
       return NextResponse.json(
-        {
-          error: 'AI_UNAVAILABLE',
-          message: AI_UNAVAILABLE_MESSAGE,
-          details: validated.error.flatten(),
-        },
+        { error: 'AI_UNAVAILABLE', message: AI_UNAVAILABLE_MESSAGE, details: validated.error.flatten() },
         { status: 503 }
       )
     }
 
-    // ---- persist ------------------------------------------------------
     const analysis = await saveAnalysis(case_id, validated.data)
+
+    const modelUsed =
+      provider.name === 'gemini'
+        ? process.env.GEMINI_GENERATION_MODEL || 'gemini-3.8-flash'
+        : process.env.AI_MODEL || 'deepseek-chat'
 
     await writeAuditLog({
       action: 'case.analyze',
       case_id,
       user_id: user.id,
       details: {
-        model: process.env.AI_MODEL || 'deepseek-chat',
+        provider: provider.name,
+        model: modelUsed,
         confidence: validated.data.confidence,
         human_review_required: validated.data.human_review_required,
         guidance_used: guidance.map((g) => g.title),
@@ -133,11 +115,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       analysis,
       guidance: guidance.map((g) => ({
-        id: g.id,
-        title: g.title,
-        category: g.category,
-        source: g.source,
-        last_verified: g.last_verified,
+        id: g.id, title: g.title, category: g.category,
+        source: g.source, last_verified: g.last_verified,
       })),
     })
   } catch (err) {

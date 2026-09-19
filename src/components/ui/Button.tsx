@@ -1,12 +1,15 @@
 import { cn } from '@/lib/utils'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
+import { Loader2 } from 'lucide-react'
+
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
   size?: Size
+  loading?: boolean
   fullWidthOnMobile?: boolean
   children: ReactNode
 }
@@ -32,9 +35,11 @@ const sizes: Record<Size, string> = {
 export function Button({
   variant = 'primary',
   size = 'md',
+  loading = false,
   fullWidthOnMobile = false,
   className,
   children,
+  disabled,
   ...rest
 }: Props) {
   return (
@@ -49,8 +54,10 @@ export function Button({
         fullWidthOnMobile && 'w-full md:w-auto',
         className
       )}
+      disabled={disabled || loading}
       {...rest}
     >
+      {loading && <Loader2 className="h-4 w-4 animate-spin shrink-0" />}
       {children}
     </button>
   )

@@ -62,7 +62,7 @@ export async function updateDocument(
   patch: Partial<DocumentRow>
 ): Promise<void> {
   const supabase = createAdminClient()
-  const { error } = await supabase.from('documents').update(patch).eq('id', id)
+  const { error } = await supabase.from('documents').update(patch as never).eq('id', id)
   if (error) throw new Error(`updateDocument failed: ${error.message}`)
 }
 

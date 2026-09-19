@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 
+import { Badge, type BadgeTone } from '@/components/ui/Badge'
+
 export interface CaseRowLite {
   id: string
   case_number: string
@@ -13,18 +15,18 @@ export interface CaseRowLite {
   created_at: string
 }
 
-const statusColors: Record<string, string> = {
-  open: 'bg-blue-100 text-blue-800',
-  in_review: 'bg-amber-100 text-amber-800',
-  resolved: 'bg-green-100 text-green-800',
-  closed: 'bg-slate-200 text-slate-700',
+const statusTones: Record<string, BadgeTone> = {
+  open: 'info',
+  in_review: 'warning',
+  resolved: 'success',
+  closed: 'neutral',
 }
 
-const priorityColors: Record<string, string> = {
-  low: 'bg-slate-100 text-slate-600',
-  normal: 'bg-slate-100 text-slate-600',
-  high: 'bg-orange-100 text-orange-800',
-  urgent: 'bg-red-100 text-red-800',
+const priorityTones: Record<string, BadgeTone> = {
+  low: 'neutral',
+  normal: 'neutral',
+  high: 'warning',
+  urgent: 'error',
 }
 
 export function CaseTable({ cases }: { cases: CaseRowLite[] }) {
@@ -52,13 +54,9 @@ export function CaseTable({ cases }: { cases: CaseRowLite[] }) {
               <span className="font-mono text-xs font-semibold text-brand-800">
                 {c.case_number}
               </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                  statusColors[c.status] || 'bg-slate-100 text-slate-600'
-                }`}
-              >
+              <Badge tone={statusTones[c.status] || 'neutral'} size="sm">
                 {c.status}
-              </span>
+              </Badge>
             </div>
             <p className="mt-1 text-sm font-medium text-slate-900">{c.category}</p>
             <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
@@ -100,22 +98,14 @@ export function CaseTable({ cases }: { cases: CaseRowLite[] }) {
                     <span className="line-clamp-1">{c.description}</span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        statusColors[c.status] || 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
+                    <Badge tone={statusTones[c.status] || 'neutral'}>
                       {c.status}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        priorityColors[c.priority] || 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
+                    <Badge tone={priorityTones[c.priority] || 'neutral'}>
                       {c.priority}
-                    </span>
+                    </Badge>
                   </td>
                 </tr>
               ))}

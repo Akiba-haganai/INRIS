@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
-const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true'
+const AUTH_ENABLED = process.env.NEXT_PUBLIC_AUTH_ENABLED === 'true'
 
 export async function proxy(request: NextRequest) {
   if (!AUTH_ENABLED) return NextResponse.next()

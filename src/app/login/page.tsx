@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardBody } from '@/components/ui/Card'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -93,14 +94,10 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
-                {error}
-              </p>
+              <InlineAlert tone="error">{error}</InlineAlert>
             )}
             {notice && (
-              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                {notice}
-              </p>
+              <InlineAlert tone="success">{notice}</InlineAlert>
             )}
 
             <Button type="submit" disabled={loading} fullWidthOnMobile>
