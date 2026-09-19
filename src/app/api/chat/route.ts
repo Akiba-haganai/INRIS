@@ -9,6 +9,7 @@ import {
 import { chatRequestSchema } from '@/lib/validations'
 import { extractJsonObject } from '@/lib/ai/json'
 import { redactText } from '@/lib/redact'
+import { chatRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -26,6 +27,12 @@ const chatOutputSchema = z.object({
 })
 
 export async function POST(req: Request) {
+  // 1. IP-based Rate limiting
+  const ip = req.headers.get('x-forwarded-for') ?? 'anonymous'
+  if (!chatRateLimit.check(ip)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   let body: unknown
   try {
     body = await req.json()
@@ -109,9 +116,6 @@ export async function POST(req: Request) {
   }
 
   // ---- 3. Was there anything to retrieve? -----------------------------
-  // Distinguish "empty knowledge base" from "no match for this question".
-  // If the entire knowledge base is empty, that's a system state, not a
-  // question-specific refusal. We say so explicitly.
   if (guidance.length === 0) {
     let kbEmpty = false
     try {
@@ -128,7 +132,7 @@ export async function POST(req: Request) {
 
     if (kbEmpty) {
       return NextResponse.json({
-        answer: NO_KB_MESSAGE,
+        answer: "I'm sorry, but there is currently no verified guidance available in the knowledge base to answer your question.",
         grounded: false,
         sources: [],
         reason: 'EMPTY_KB',
@@ -137,7 +141,9 @@ export async function POST(req: Request) {
   }
 
   // ---- 4. Generate -----------------------------------------------------
-  const context = formatGuidanceContext(guidance)
+  const contextStr = guidance.length > 0
+    ? formatGuidanceContext(guidance)
+    : '(no matching guidance found)'
 
   // FIX: the user's own question previously went to the AI provider
   // unredacted -- only case descriptions were redacted. A member of the
@@ -150,7 +156,10 @@ export async function POST(req: Request) {
     const raw = await provider.generate({
       system: GUIDANCE_SYSTEM_PROMPT,
       messages: [
-        { role: 'system', content: `APPROVED GUIDANCE CONTEXT:\n\n${context}` },
+        {
+          role: 'system',
+          content: `APPROVED GUIDANCE CONTEXT:\n\n${contextStr}`,
+        },
         ...history,
         { role: 'user', content: redaction.text },
       ],

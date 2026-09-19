@@ -31,8 +31,10 @@ begin
     g.last_verified
   from public.guidance_chunks gc
   join public.guidance g on g.id = gc.guidance_id
+  join public.documents d on d.id = gc.document_id
   where gc.embedding is not null
     and g.status = 'approved'
+    and d.status = 'ready'
     and (1 - (gc.embedding <=> query_embedding)) > match_threshold
   order by gc.embedding <=> query_embedding
   limit match_count;

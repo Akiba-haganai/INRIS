@@ -12,12 +12,19 @@ import { writeAuditLog } from '@/lib/audit'
 import { redactText } from '@/lib/redact'
 import { requireStaffApi } from '@/lib/auth'
 import { extractJsonObject } from '@/lib/ai/json' // FIX: was duplicated inline here; now shared with /api/chat
+import { analyzeRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
 const requestSchema = z.object({ case_id: z.string().uuid() })
 
 export async function POST(req: Request) {
+  // 1. IP-based Rate limiting
+  const ip = req.headers.get('x-forwarded-for') ?? 'anonymous'
+  if (!analyzeRateLimit.check(ip)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   const user = await requireStaffApi()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorised.' }, { status: 401 })
