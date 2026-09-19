@@ -2,11 +2,19 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { BottomNav } from '@/components/layout/BottomNav'
+import { PWARegister } from '@/components/PWARegister'
 
 export const metadata: Metadata = {
   title: 'INRIS Assistant — Passport Guidance & Case Intelligence',
   description:
     'AI-assisted passport guidance and case intelligence. Advisory only.',
+  // FIX: no manifest, no icons — despite this being described as a
+  // mobile-first PWA, there was nothing here making it installable.
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/icons/icon-192.png',
+  },
 }
 
 export const viewport: Viewport = {
@@ -16,7 +24,11 @@ export const viewport: Viewport = {
   themeColor: '#2a4e7a',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="en">
       <body className="min-h-dvh bg-surface-muted text-foreground antialiased">
@@ -29,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           government decision.
         </footer>
         <BottomNav />
+        <PWARegister />
       </body>
     </html>
   )

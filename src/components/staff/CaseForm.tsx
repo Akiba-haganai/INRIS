@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
 import { InlineAlert } from '@/components/ui/InlineAlert'
 import { CASE_CATEGORIES, CASE_PRIORITIES } from '@/lib/validations'
-import { Loader2, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 export function CaseForm() {
   const router = useRouter()
@@ -38,7 +38,12 @@ export function CaseForm() {
         return
       }
       setOpen(false)
-      router.refresh()
+      // FIX: this used to just close the form and silently refresh the
+      // list — no confirmation the case was actually created, no visible
+      // moment showing its new INRIS-##### number unless the user spotted
+      // it themselves in the list. Landing on the case's own detail page
+      // is the confirmation: the number is right there in the header.
+      router.push(`/staff/cases/${data.case.id}`)
     } catch {
       setError('Network error. Please try again.')
     } finally {
@@ -121,8 +126,7 @@ export function CaseForm() {
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={submitting} fullWidthOnMobile>
-          {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+        <Button type="submit" loading={submitting} fullWidthOnMobile>
           Create case
         </Button>
       </div>

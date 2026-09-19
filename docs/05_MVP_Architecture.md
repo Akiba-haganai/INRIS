@@ -67,8 +67,4 @@ The only two environment variables that select the AI backend are
 OpenAI-compatible endpoint (vLLM, Ollama, TGI) requires no code changes.
 
 ## Deliberate Non-Choices (why we didn't)
-- **No vector DB / embeddings in MVP.** Keyword retrieval over a small,
-  curated guidance set is sufficient for the MVP and avoids an extra dependency.
-- **No auth in MVP.** Case routes are server-only; the boundary is the
-  service-role key. Real auth is a later iteration.
 - **No streaming.** Responses are short; simplicity beats perceived speed.

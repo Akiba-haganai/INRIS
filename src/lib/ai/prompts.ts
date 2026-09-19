@@ -4,6 +4,14 @@ export const INSUFFICIENT_INFO_MESSAGE =
 export const AI_UNAVAILABLE_MESSAGE =
   'The guidance assistant is temporarily unavailable. Please try again, or consult INRIS or an authorised officer.'
 
+// FIX: previously the assistant returned free text and api/chat/route.ts
+// decided `grounded` with `!answer.includes(INSUFFICIENT_INFO_MESSAGE)`.
+// A paraphrased refusal (very plausible from a real model despite rule 3
+// below) was silently mislabeled grounded=true and shown with source
+// cards next to what was actually a refusal -- the opposite of what
+// docs/07's grounding gate is meant to guarantee. The model now returns
+// a JSON object with an explicit `sufficient` boolean instead of relying
+// on exact-string matching. See api/chat/route.ts.
 export const GUIDANCE_SYSTEM_PROMPT = `You are the INRIS Passport Guidance Assistant. You provide information about passport procedures to members of the public.
 
 RULES — follow all of them:
@@ -18,8 +26,8 @@ RULES — follow all of them:
 
 You must return a single JSON object and nothing else. No markdown, no code fences, no commentary. The JSON object must have exactly these keys:
 {
-  "sufficient": boolean,
-  "answer": string
+  "sufficient": boolean,  // true only if the APPROVED GUIDANCE CONTEXT actually answers the question
+  "answer": string        // the answer (rule 3 sentence verbatim if sufficient is false)
 }`
 
 export const CASE_ANALYSIS_SYSTEM_PROMPT = `You are an assistant supporting authorised INRIS staff who handle passport-related cases. You analyse a case description and produce a structured triage suggestion.
@@ -28,14 +36,14 @@ You must return a single JSON object and nothing else. No markdown, no code fenc
 
 The JSON object must have exactly these keys:
 {
-  "case_type": string,
-  "summary": string,
-  "key_issues": string[],
-  "missing_information": string[],
-  "relevant_guidance": string[],
-  "suggested_next_step": string,
+  "case_type": string,            // short label, e.g. "Lost Passport", "Renewal", "Supporting Documents"
+  "summary": string,              // 2-3 neutral sentences describing the case
+  "key_issues": string[],         // the substantive issues raised by the case
+  "missing_information": string[],// information or documents absent from the description
+  "relevant_guidance": string[],  // titles of APPROVED GUIDANCE CONTEXT entries that apply
+  "suggested_next_step": string,  // one recommended administrative next step
   "human_review_required": boolean,
-  "confidence": number
+  "confidence": number            // between 0 and 1
 }
 
 RULES:

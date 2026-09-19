@@ -35,6 +35,9 @@ export async function POST(req: Request) {
 
   const file = form.get('file')
   const title = (form.get('title') as string | null) ?? undefined
+  // FIX: was never read from the form at all — ingestDocument() now
+  // accepts it and uses it for the linked guidance row's category.
+  const category = (form.get('category') as string | null) ?? undefined
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'Missing "file" field.' }, { status: 400 })
@@ -56,6 +59,7 @@ export async function POST(req: Request) {
       filename: file.name,
       mimeType: file.type || 'application/octet-stream',
       title,
+      category,
       uploadedBy: user.id,
     })
 
@@ -65,6 +69,7 @@ export async function POST(req: Request) {
       details: {
         document_id: result.documentId,
         filename: file.name,
+        category,
         status: result.status,
         chunk_count: result.chunkCount,
       },

@@ -1,200 +1,176 @@
-import crypto from 'crypto'
+import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createDocument, updateDocument, findDocumentBySha } from '@/lib/documents'
+import { extractText } from './extract'
+import { chunkText } from './chunk'
 import { getProvider } from '@/lib/ai/provider'
+import { CASE_CATEGORIES } from '@/lib/validations'
 
 export interface IngestInput {
   buffer: Buffer
   filename: string
   mimeType: string
   title?: string
+  category?: string // FIX: new — see note below
   uploadedBy: string | null
 }
 
 export interface IngestResult {
   documentId: string
-  status: 'ready' | 'error'
-  chunkCount?: number
-  error?: string
+  status: 'ready' | 'failed'
+  chunkCount: number
+  message?: string
 }
 
-/**
- * Full pipeline: upload file to Storage → insert document record →
- * extract text → embed → store chunks.
- * Called directly from the POST /api/documents route.
- */
+// Guidance library entries are capped at this many characters. The full
+// text remains searchable via guidance_chunks (vector search); this is
+// only the coarse "library" copy shown on /guidance.
+const GUIDANCE_CONTENT_PREVIEW_CHARS = 6000
+
 export async function ingestDocument(input: IngestInput): Promise<IngestResult> {
-  const supabase = createAdminClient()
+  const sha256 = createHash('sha256').update(input.buffer).digest('hex')
 
-  const sha256 = crypto
-    .createHash('sha256')
-    .update(input.buffer)
-    .digest('hex')
-
-  // De-dupe by content hash
-  const { data: existing } = await supabase
-    .from('documents')
-    .select('id, status')
-    .eq('sha256', sha256)
-    .maybeSingle()
-
+  // Deduplicate by content hash.
+  const existing = await findDocumentBySha(sha256)
   if (existing) {
-    return { documentId: existing.id, status: 'ready', chunkCount: 0 }
+    return {
+      documentId: existing.id,
+      status: existing.status === 'ready' ? 'ready' : 'failed',
+      chunkCount: 0,
+      message: 'Identical document already uploaded.',
+    }
   }
 
-  const ext = input.filename.split('.').pop() ?? 'bin'
-  const storagePath = `${Date.now()}-${sha256.slice(0, 8)}.${ext}`
+  const storagePath = `uploads/${sha256.slice(0, 12)}-${sanitiseFilename(input.filename)}`
 
+  // 1. Upload original to storage
+  const supabase = createAdminClient()
   const { error: uploadError } = await supabase.storage
-    .from('guidance-docs')
-    .upload(storagePath, input.buffer, { contentType: input.mimeType })
+    .from('guidance-documents')
+    .upload(storagePath, input.buffer, {
+      contentType: input.mimeType,
+      upsert: false,
+    })
 
   if (uploadError) {
-    return {
-      documentId: '',
-      status: 'error',
-      error: `Storage upload failed: ${uploadError.message}`,
-    }
+    throw new Error(`Storage upload failed: ${uploadError.message}`)
   }
 
-  const { data: docRow, error: insertError } = await supabase
-    .from('documents')
-    .insert({
-      title: input.title ?? input.filename,
-      original_filename: input.filename,
-      storage_path: storagePath,
-      mime_type: input.mimeType,
-      file_size_bytes: input.buffer.byteLength,
-      sha256,
-      uploaded_by: input.uploadedBy,
-      status: 'processing',
-    } as never)
-    .select('id')
-    .single()
+  const title = input.title || stripExtension(input.filename)
+  const category = CASE_CATEGORIES.includes(input.category as (typeof CASE_CATEGORIES)[number])
+    ? (input.category as string)
+    : 'Other'
 
-  if (insertError || !docRow) {
-    return {
-      documentId: '',
-      status: 'error',
-      error: `DB insert failed: ${insertError?.message ?? 'unknown'}`,
-    }
-  }
+  // 2. Create the document row
+  const doc = await createDocument({
+    title,
+    original_filename: input.filename,
+    storage_path: storagePath,
+    mime_type: input.mimeType,
+    file_size_bytes: input.buffer.length,
+    sha256,
+    uploaded_by: input.uploadedBy,
+  })
 
-  const documentId: string = docRow.id
-  const result = await processDocument(documentId, input.buffer, input.mimeType)
-
-  return {
-    documentId,
-    status: result.status === 'completed' ? 'ready' : 'error',
-    chunkCount: result.chunksCreated,
-    error: result.errorMessage,
-  }
-}
-
-/**
- * Processing step: text extraction → chunking → embedding → DB insert.
- * Can also be called standalone with a document ID when the file is already in Storage.
- */
-export async function processDocument(
-  documentId: string,
-  bufferOrNull?: Buffer,
-  mimeTypeHint?: string
-): Promise<{ documentId: string; status: 'completed' | 'error'; chunksCreated?: number; errorMessage?: string }> {
-  const supabase = createAdminClient()
-
-  const update = (patch: Record<string, unknown>) =>
-    supabase.from('documents').update(patch as never).eq('id', documentId)
-
-  await update({ status: 'processing', updated_at: new Date().toISOString() })
-
+  // 3. Extract → chunk → embed → persist
   try {
-    let text: string
+    await updateDocument(doc.id, { status: 'processing' })
 
-    if (bufferOrNull && mimeTypeHint) {
-      // Copy into a guaranteed ArrayBuffer (avoids SharedArrayBuffer TS issue)
-      const ab = new Uint8Array(bufferOrNull).buffer as ArrayBuffer
-      text = await extractText(new Blob([ab]), mimeTypeHint)
-    } else {
-      const { data: doc, error: docError } = await supabase
-        .from('documents')
-        .select('storage_path, mime_type')
-        .eq('id', documentId)
-        .single()
-
-      if (docError || !doc) throw new Error('Document not found')
-
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from('guidance-docs')
-        .download((doc as { storage_path: string }).storage_path)
-
-      if (downloadError) throw new Error(`Download failed: ${downloadError.message}`)
-
-      text = await extractText(fileData, (doc as { mime_type: string }).mime_type)
-    }
-
+    const { text, pageCount } = await extractText(
+      input.buffer,
+      input.mimeType,
+      input.filename
+    )
     const chunks = chunkText(text)
-    const provider = getProvider()
-    const embeddings = await provider.embed(chunks)
 
-    if (embeddings.length !== chunks.length) {
-      throw new Error(`Embedding count mismatch: ${embeddings.length} vs ${chunks.length}`)
+    if (chunks.length === 0) {
+      await updateDocument(doc.id, {
+        status: 'failed',
+        error_message: 'No extractable text found in document.',
+      })
+      return { documentId: doc.id, status: 'failed', chunkCount: 0 }
     }
 
-    const { error: insertError } = await supabase
+    let embeddings: number[][] = []
+    let embeddingError: string | null = null
+    try {
+      embeddings = await getProvider().embed(chunks.map((c) => c.content))
+    } catch (err) {
+      embeddingError = err instanceof Error ? err.message : 'Embedding failed'
+      console.error('[ingestion] embedding failed:', err)
+    }
+
+    if (embeddingError) {
+      await updateDocument(doc.id, {
+        status: 'failed',
+        error_message: `Embedding failed: ${embeddingError}`,
+      })
+      return { documentId: doc.id, status: 'failed', chunkCount: 0, message: embeddingError }
+    }
+
+    const rows = chunks.map((c, i) => ({
+      document_id: doc.id,
+      chunk_index: c.index,
+      content: c.content,
+      token_count: c.tokenCount,
+      embedding: embeddings[i] ?? null,
+    }))
+
+    const { error: chunkError } = await supabase
       .from('guidance_chunks')
-      .insert(
-        chunks.map((content, i) => ({
-          document_id: documentId,
-          chunk_index: i,
-          content,
-          embedding: embeddings[i],
-        })) as never
-      )
+      .insert(rows)
 
-    if (insertError) throw new Error(`Chunk insert failed: ${insertError.message}`)
-
-    await update({
-      status: 'completed',
-      processed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-
-    return { documentId, status: 'completed', chunksCreated: chunks.length }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown processing error'
-    await update({
-      status: 'error',
-      error_message: message,
-      updated_at: new Date().toISOString(),
-    })
-    return { documentId, status: 'error', errorMessage: message }
-  }
-}
-
-async function extractText(blob: Blob, mimeType: string): Promise<string> {
-  if (mimeType === 'text/plain' || mimeType === 'text/markdown') {
-    return blob.text()
-  }
-  throw new Error(`Unsupported MIME type for text extraction: ${mimeType}`)
-}
-
-function chunkText(text: string): string[] {
-  const paragraphs = text
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-
-  const chunks: string[] = []
-  let currentChunk = ''
-
-  for (const p of paragraphs) {
-    if (currentChunk.length + p.length > 1000) {
-      if (currentChunk) chunks.push(currentChunk)
-      currentChunk = p
-    } else {
-      currentChunk = currentChunk ? `${currentChunk}\n\n${p}` : p
+    if (chunkError) {
+      await updateDocument(doc.id, {
+        status: 'failed',
+        error_message: `Chunk insert failed: ${chunkError.message}`,
+      })
+      return { documentId: doc.id, status: 'failed', chunkCount: 0 }
     }
-  }
-  if (currentChunk) chunks.push(currentChunk)
 
-  return chunks
+    await updateDocument(doc.id, {
+      status: 'ready',
+      processed_at: new Date().toISOString(),
+      metadata: { page_count: pageCount, chunk_count: chunks.length },
+    })
+
+    // FIX: previously ingestion only wrote to `documents` +
+    // `guidance_chunks`. It never created a row in the canonical
+    // `guidance` table, so uploaded documents were searchable by chat
+    // (vector search) but invisible on the public Guidance Library page
+    // (FR-11) and never got the version/status/effective_date/verified
+    // lifecycle fields the assignment asks for (Section 9). This closes
+    // that gap by creating one linked, lifecycle-tagged `guidance` row
+    // per successfully-ingested document. Full text stays searchable via
+    // guidance_chunks; this row is the library-facing summary copy.
+    const { error: guidanceError } = await supabase.from('guidance').insert({
+      title,
+      category,
+      content: text.slice(0, GUIDANCE_CONTENT_PREVIEW_CHARS),
+      source: `Uploaded document: ${input.filename}`,
+      document_id: doc.id,
+      version: '1',
+      status: 'approved',
+      last_verified: new Date().toISOString(),
+    })
+    if (guidanceError) {
+      // Don't fail the whole ingest over this — the chunks/vectors are
+      // already good and chat retrieval still works. Just surface it.
+      console.error('[ingestion] failed to create linked guidance row:', guidanceError.message)
+    }
+
+    return { documentId: doc.id, status: 'ready', chunkCount: chunks.length }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown ingestion error'
+    await updateDocument(doc.id, { status: 'failed', error_message: message })
+    return { documentId: doc.id, status: 'failed', chunkCount: 0, message }
+  }
+}
+
+function sanitiseFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100)
+}
+
+function stripExtension(name: string): string {
+  return name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim()
 }

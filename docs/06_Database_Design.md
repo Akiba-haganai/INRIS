@@ -76,7 +76,8 @@ RLS: enabled, no anon policy.
   insert.
 - `trg_cases_updated_at` — refreshes `cases.updated_at` on update.
 
-## Not Yet Built (deliberate)
-- `users` table — MVP has no auth; the `user_id` column exists for future use.
-- Embeddings/pgvector — deferred until after the MVP is validated.
-- Case documents — no file upload in MVP.
+## Auth and Vector Search
+
+- `users` table tracks authentication.
+- Embeddings and vector search are implemented using `pgvector`.
+- Case documents are implemented using Supabase Storage and the `documents` / `guidance_chunks` tables.

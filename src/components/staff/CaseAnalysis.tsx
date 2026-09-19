@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { InlineAlert } from '@/components/ui/InlineAlert'
+import { Badge } from '@/components/ui/Badge'
 import { SkeletonText } from '@/components/ui/Skeleton'
-import { Loader2, AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react'
+import { Loader2, AlertTriangle, CheckCircle2, Sparkles, Bot } from 'lucide-react'
 
 interface Analysis {
   id: string
-  case_type: string | null
+  case_type: string | null // FIX: was computed by the model and discarded; now persisted (see 002_case_analysis_review.sql)
   summary: string
   issues: string[]
   missing_information: string[]
@@ -21,7 +22,10 @@ interface Analysis {
 }
 
 interface GuidanceRef {
-  id: string; title: string; category: string; source: string
+  id: string
+  title: string
+  category: string
+  source: string
 }
 
 export function CaseAnalysis({
@@ -61,19 +65,32 @@ export function CaseAnalysis({
     }
   }
 
+  // FIX: docs/10_UI_UX_Specification.md's Case Detail spec says "All AI
+  // fields visually de-emphasised relative to Case details — they are
+  // suggestions, not facts", but this card previously rendered with the
+  // exact same weight as the Case details card next to it (same white
+  // background, same shadow-sm, same border) — nothing actually
+  // distinguished "AI output" from "recorded fact" at a glance. Muted
+  // background + no shadow + a persistent "AI-generated" eyebrow badge
+  // (Von Restorff: the thing that should stand out is "treat this with
+  // skepticism", not just the confidence number) closes that gap.
   return (
-    <Card>
+    <Card className="border-dashed bg-surface-muted/70 shadow-none">
       <CardHeader
         title="AI Case Analysis"
         subtitle="Advisory only. A staff member makes the decision."
         action={
-          <Button size="sm" onClick={runAnalysis} disabled={loading}>
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button size="sm" onClick={runAnalysis} loading={loading}>
             {analysis ? 'Re-run' : 'Run analysis'}
           </Button>
         }
       />
       <CardBody className="space-y-4">
+        <Badge tone="neutral" size="sm" className="border-dashed">
+          <Bot className="h-3 w-3" />
+          AI-generated — verify before acting
+        </Badge>
+
         {error && <InlineAlert tone="error">{error}</InlineAlert>}
 
         {!analysis && !loading && (
@@ -81,7 +98,9 @@ export function CaseAnalysis({
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600">
               <Sparkles className="h-5 w-5" />
             </div>
-            <p className="text-sm font-medium text-foreground">No analysis yet</p>
+            <p className="text-sm font-medium text-foreground">
+              No analysis yet
+            </p>
             <p className="mt-1 max-w-sm text-xs text-slate-500">
               Run the analysis to generate a structured summary, missing
               information, and a suggested next step grounded in the knowledge
@@ -120,7 +139,9 @@ export function CaseAnalysis({
                 ) : (
                   <CheckCircle2 className="h-3 w-3" />
                 )}
-                {analysis.human_review_required ? 'Human review required' : 'No review flagged'}
+                {analysis.human_review_required
+                  ? 'Human review required'
+                  : 'No review flagged'}
               </span>
               <span className="text-slate-500">
                 Confidence{' '}
@@ -133,7 +154,9 @@ export function CaseAnalysis({
             <Field label="Summary">{analysis.summary}</Field>
 
             {analysis.issues.length > 0 && (
-              <Field label="Key issues"><BulletList items={analysis.issues} /></Field>
+              <Field label="Key issues">
+                <BulletList items={analysis.issues} />
+              </Field>
             )}
 
             {analysis.missing_information.length > 0 && (
@@ -142,14 +165,21 @@ export function CaseAnalysis({
               </Field>
             )}
 
-            <Field label="Suggested next step">{analysis.suggested_action}</Field>
+            <Field label="Suggested next step">
+              {analysis.suggested_action}
+            </Field>
 
             {guidance.length > 0 && (
               <Field label="Relevant guidance">
                 <ul className="space-y-1">
                   {guidance.map((g) => (
-                    <li key={g.id} className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-slate-600">
-                      <span className="font-medium text-slate-800">{g.title}</span>
+                    <li
+                      key={g.id}
+                      className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-slate-600"
+                    >
+                      <span className="font-medium text-slate-800">
+                        {g.title}
+                      </span>
                       <span className="text-slate-400">·</span>
                       <span className="text-slate-500">{g.category}</span>
                     </li>
@@ -164,7 +194,13 @@ export function CaseAnalysis({
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
   return (
     <div>
       <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">

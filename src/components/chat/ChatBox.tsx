@@ -139,15 +139,12 @@ export function ChatBox() {
         <Button
           type="submit"
           size="md"
-          disabled={loading || !input.trim()}
+          loading={loading}
+          disabled={!input.trim()}
           aria-label="Send"
           className="shrink-0"
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <ArrowUp className="h-4 w-4" />
-          )}
+          {!loading && <ArrowUp className="h-4 w-4" />}
         </Button>
       </form>
     </div>

@@ -17,6 +17,8 @@ const NO_AI_MESSAGE =
 const NO_KB_MESSAGE =
   'I don\'t have any verified guidance in my knowledge base yet. Please consult INRIS or an authorised officer.'
 
+// FIX: matches the shape the model is now asked for in prompts.ts, so
+// grounding is read from an explicit field instead of guessed from text.
 const chatOutputSchema = z.object({
   sufficient: z.boolean(),
   answer: z.string(),
@@ -40,6 +42,7 @@ export async function POST(req: Request) {
 
   const { question, history } = parsed.data
 
+  // ---- 0. Is the AI configured at all? --------------------------------
   let provider
   try {
     provider = getProvider()
@@ -67,6 +70,7 @@ export async function POST(req: Request) {
     })
   }
 
+  // ---- 1. Retrieve guidance ------------------------------------------
   let guidance
   try {
     guidance = await retrieveGuidance(question, 4)
@@ -83,6 +87,10 @@ export async function POST(req: Request) {
     )
   }
 
+  // ---- 2. Was there anything to retrieve? -----------------------------
+  // Distinguish "empty knowledge base" from "no match for this question".
+  // If the entire knowledge base is empty, that's a system state, not a
+  // question-specific refusal. We say so explicitly.
   if (guidance.length === 0) {
     let kbEmpty = false
     try {
@@ -93,7 +101,9 @@ export async function POST(req: Request) {
         .select('id', { count: 'exact', head: true })
         .eq('status', 'approved')
       kbEmpty = (count ?? 0) === 0
-    } catch {}
+    } catch {
+      // If the count fails, assume not empty — fall through to the standard refusal.
+    }
 
     return NextResponse.json({
       answer: kbEmpty ? NO_KB_MESSAGE : INSUFFICIENT_INFO_MESSAGE,
@@ -103,7 +113,14 @@ export async function POST(req: Request) {
     })
   }
 
+  // ---- 3. Generate -----------------------------------------------------
   const context = formatGuidanceContext(guidance)
+
+  // FIX: the user's own question previously went to the AI provider
+  // unredacted -- only case descriptions were redacted. A member of the
+  // public could type a passport/ID number into the chat box and it
+  // would go straight to a free-tier external provider. Redact it the
+  // same way case text is redacted (see docs/09_Data_Governance §PII).
   const redaction = redactText(question)
 
   try {
@@ -119,6 +136,12 @@ export async function POST(req: Request) {
       maxOutputTokens: 700,
     })
 
+    // FIX: previously `grounded` was decided by
+    // `!answer.includes(INSUFFICIENT_INFO_MESSAGE)` on free text -- a
+    // paraphrased refusal was silently mislabeled "grounded" and shown
+    // with source cards. The model now returns explicit JSON with a
+    // `sufficient` flag; if parsing fails we fail closed (not grounded)
+    // rather than risk showing fabricated content as sourced.
     let output: z.infer<typeof chatOutputSchema>
     try {
       const json = extractJsonObject(raw)

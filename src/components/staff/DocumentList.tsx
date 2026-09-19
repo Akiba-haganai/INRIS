@@ -4,14 +4,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Trash2, FileText, Loader2 } from 'lucide-react'
+import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import type { DocumentRow } from '@/lib/documents'
 
-const statusColours: Record<string, string> = {
-  uploaded: 'bg-slate-100 text-slate-700',
-  processing: 'bg-blue-100 text-blue-800',
-  ready: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  retired: 'bg-slate-200 text-slate-700',
+const statusTones: Record<string, BadgeTone> = {
+  uploaded: 'neutral',
+  processing: 'info',
+  ready: 'success',
+  failed: 'error',
+  retired: 'neutral',
 }
 
 export function DocumentList({ documents }: { documents: DocumentRow[] }) {
@@ -51,11 +52,9 @@ export function DocumentList({ documents }: { documents: DocumentRow[] }) {
               <span className="truncate text-sm font-medium text-foreground">
                 {d.title}
               </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColours[d.status] || 'bg-slate-100'}`}
-              >
+              <Badge tone={statusTones[d.status] || 'neutral'} size="sm">
                 {d.status}
-              </span>
+              </Badge>
             </div>
             <p className="mt-0.5 truncate text-xs text-slate-500">
               {d.original_filename} · {(d.file_size_bytes / 1024).toFixed(0)} KB

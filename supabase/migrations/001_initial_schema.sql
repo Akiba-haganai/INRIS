@@ -1,6 +1,13 @@
 -- =========================================================
 -- 001_initial_schema.sql
--- Foundational schema described in docs/06_Database_Design.md.
+--
+-- FIX: this file was present in the repo but EMPTY. Every later
+-- migration (003-006) does `alter table public.guidance ...` etc,
+-- assuming these tables already exist. Nothing in the repo actually
+-- created them. This is the foundational schema described in
+-- docs/06_Database_Design.md, recreated from that spec.
+--
+-- Run this first, before 003_guidance_metadata.sql.
 -- =========================================================
 
 create extension if not exists pgcrypto;
@@ -43,6 +50,7 @@ create table if not exists public.cases (
 create index if not exists cases_status_idx on public.cases (status);
 create index if not exists cases_category_idx on public.cases (category);
 
+-- case_number generation: INRIS-##### via a dedicated sequence.
 create sequence if not exists public.case_number_seq start with 1 increment by 1;
 
 create or replace function public.set_case_number()
@@ -102,6 +110,12 @@ create table if not exists public.audit_logs (
 create index if not exists audit_logs_case_id_idx on public.audit_logs (case_id);
 
 -- ---------- RLS --------------------------------------------------------
+-- guidance: public read (narrowed to status='approved' once 004 adds that
+-- column and replaces this policy). cases / case_analysis / audit_logs:
+-- RLS on, no anon policies at all -- server-only via the service-role key.
+-- (004_documents_and_chunks.sql later adds authenticated staff-read
+-- policies on top of this.)
+
 alter table public.guidance       enable row level security;
 alter table public.cases          enable row level security;
 alter table public.case_analysis  enable row level security;

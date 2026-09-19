@@ -1,7 +1,11 @@
 /**
- * Extract the first JSON object from a model reply, tolerating code fences
- * and stray prose around the object. Used by /api/chat and /api/cases/analyze.
+ * FIX: previously duplicated inline inside api/cases/analyze/route.ts.
+ * Now shared so api/chat/route.ts can use the same tolerant parsing for
+ * its new structured { sufficient, answer } output (see prompts.ts /
+ * chat/route.ts fix notes).
  */
+
+/** Extract the first JSON object from a model reply, tolerating code fences. */
 export function extractJsonObject(text: string): unknown {
   let t = text.trim()
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i)

@@ -11,7 +11,7 @@ import { getCase, saveAnalysis } from '@/lib/cases'
 import { writeAuditLog } from '@/lib/audit'
 import { redactText } from '@/lib/redact'
 import { requireStaffApi } from '@/lib/auth'
-import { extractJsonObject } from '@/lib/ai/json'
+import { extractJsonObject } from '@/lib/ai/json' // FIX: was duplicated inline here; now shared with /api/chat
 
 export const runtime = 'nodejs'
 
@@ -43,13 +43,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Case not found.' }, { status: 404 })
     }
 
+    // ---- retrieve approved guidance relevant to the case -------------
     const query = `${caseRow.category} ${caseRow.description}`
     const guidance = await retrieveGuidance(query, 5)
     const context = guidance.length
       ? formatGuidanceContext(guidance)
       : '(no matching approved guidance found)'
 
+    // ---- redact before sending to the model -----------------------------
     const redaction = redactText(caseRow.description)
+
     const provider = getProvider()
 
     let raw: string
@@ -57,7 +60,10 @@ export async function POST(req: Request) {
       raw = await provider.generate({
         system: CASE_ANALYSIS_SYSTEM_PROMPT,
         messages: [
-          { role: 'system', content: `APPROVED GUIDANCE CONTEXT:\n\n${context}` },
+          {
+            role: 'system',
+            content: `APPROVED GUIDANCE CONTEXT:\n\n${context}`,
+          },
           {
             role: 'user',
             content: [
@@ -81,18 +87,32 @@ export async function POST(req: Request) {
       )
     }
 
+    // ---- parse + validate --------------------------------------------
     const json = extractJsonObject(raw)
     const validated = caseAnalysisOutputSchema.safeParse(json)
     if (!validated.success) {
       console.error('[api/cases/analyze] schema mismatch:', validated.error.flatten())
       return NextResponse.json(
-        { error: 'AI_UNAVAILABLE', message: AI_UNAVAILABLE_MESSAGE, details: validated.error.flatten() },
+        {
+          error: 'AI_UNAVAILABLE',
+          message: AI_UNAVAILABLE_MESSAGE,
+          details: validated.error.flatten(),
+        },
         { status: 503 }
       )
     }
 
+    // ---- persist ------------------------------------------------------
+    // FIX: saveAnalysis() previously dropped case_type and
+    // relevant_guidance on the floor -- they were validated above and
+    // then never written anywhere, even though FR-05 explicitly asks
+    // for both. See 002_case_analysis_review.sql for the new columns.
     const analysis = await saveAnalysis(case_id, validated.data)
 
+    // FIX: this used to hard-code `process.env.AI_MODEL || 'deepseek-chat'`
+    // regardless of which provider actually ran -- with the default
+    // AI_PROVIDER=gemini, every audit row falsely claimed "deepseek-chat"
+    // was used. Now records the model that was actually active.
     const modelUsed =
       provider.name === 'gemini'
         ? process.env.GEMINI_GENERATION_MODEL || 'gemini-3.8-flash'
@@ -115,8 +135,11 @@ export async function POST(req: Request) {
     return NextResponse.json({
       analysis,
       guidance: guidance.map((g) => ({
-        id: g.id, title: g.title, category: g.category,
-        source: g.source, last_verified: g.last_verified,
+        id: g.id,
+        title: g.title,
+        category: g.category,
+        source: g.source,
+        last_verified: g.last_verified,
       })),
     })
   } catch (err) {

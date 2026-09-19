@@ -6,11 +6,16 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { InlineAlert } from '@/components/ui/InlineAlert'
 import { Loader2, Upload } from 'lucide-react'
+import { CASE_CATEGORIES } from '@/lib/validations'
 
 export function DocumentUpload() {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
+  // FIX: category previously wasn't collected at all, so every uploaded
+  // document's linked guidance row defaulted to "Other" regardless of
+  // what it actually covered (see FR-03).
+  const [category, setCategory] = useState<string>(CASE_CATEGORIES[0])
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +39,7 @@ export function DocumentUpload() {
     const fd = new FormData()
     fd.append('file', file)
     if (title) fd.append('title', title)
+    fd.append('category', category)
 
     try {
       const res = await fetch('/api/documents', { method: 'POST', body: fd })
@@ -44,7 +50,7 @@ export function DocumentUpload() {
       }
       setSuccess(
         data.status === 'ready'
-          ? `Indexed ${data.chunkCount} chunks.`
+          ? `Indexed ${data.chunkCount} chunks. Added to the ${category} guidance library.`
           : data.message || 'Document uploaded but not fully processed.'
       )
       setFile(null)
@@ -60,15 +66,33 @@ export function DocumentUpload() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <label className="mb-1 block text-xs font-medium text-slate-600">
-          Title
-        </label>
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Passport Application Requirements 2025"
-        />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Title
+          </label>
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Passport Application Requirements 2025"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Category
+          </label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="focus-ring h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-foreground md:h-10 md:text-sm"
+          >
+            {CASE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div>
@@ -93,14 +117,11 @@ export function DocumentUpload() {
       <div className="flex justify-end">
         <Button
           onClick={onSubmit}
-          disabled={loading || !file}
+          loading={loading}
+          disabled={!file}
           fullWidthOnMobile
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4" />
-          )}
+          {!loading && <Upload className="h-4 w-4" />}
           {loading ? 'Uploading and indexing' : 'Upload and index'}
         </Button>
       </div>
