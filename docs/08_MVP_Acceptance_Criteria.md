@@ -5,9 +5,14 @@ The MVP is accepted when every item below passes on both a mobile viewport
 
 ## A. Guidance Assistant
 
-- [ ] **A1** Asking *"I lost my passport. What should I do?"* returns a
-  grounded answer whose text reflects the seeded *Lost Passport — What To Do*
-  entry.
+- [ ] **A1** Guidance Retrieval & Ingestion Workflow:
+  - **Guidance Retrieval:** The chat interface must answer queries strictly using information extracted from uploaded documents.
+  - **Empty State Support:** If the knowledge base contains no approved documents, the system must clearly indicate that no verified guidance is currently available rather than fabricating or guessing answers.
+  - **Ingestion Workflow Validation:** 
+    - A staff member uploads an authoritative INRIS document.
+    - The system processes the document and enters it into the `draft` state.
+    - A staff member reviews and marks the document as `approved`.
+    - Only after approval will the public chat be able to retrieve and serve information from the document.
 - [ ] **A2** That answer displays at least one source card naming the guidance
   entry, its category and its source label.
 - [ ] **A3** Asking *"How do I apply for a diplomatic visa for Mars?"* returns

@@ -7,9 +7,13 @@ create or replace function public.match_guidance_chunks(
 returns table (
   id              uuid,
   document_id     uuid,
+  guidance_id     uuid,
   content         text,
   similarity      float,
-  document_title  text
+  document_title  text,
+  guidance_category text,
+  guidance_source text,
+  last_verified   timestamptz
 )
 language plpgsql stable security definer set search_path = public
 as $$
@@ -18,13 +22,17 @@ begin
   select
     gc.id,
     gc.document_id,
+    g.id as guidance_id,
     gc.content,
     (1 - (gc.embedding <=> query_embedding))::float as similarity,
-    d.title as document_title
+    g.title as document_title,
+    g.category as guidance_category,
+    g.source as guidance_source,
+    g.last_verified
   from public.guidance_chunks gc
-  join public.documents d on d.id = gc.document_id
+  join public.guidance g on g.id = gc.guidance_id
   where gc.embedding is not null
-    and d.status = 'ready'
+    and g.status = 'approved'
     and (1 - (gc.embedding <=> query_embedding)) > match_threshold
   order by gc.embedding <=> query_embedding
   limit match_count;

@@ -49,16 +49,20 @@ export async function retrieveGuidance(
       vectorResults = (data ?? []).map((row: {
         id: string
         document_id: string
+        guidance_id: string
         content: string
         similarity: number
         document_title: string
+        guidance_category: string
+        guidance_source: string
+        last_verified: string | null
       }) => ({
-        id: row.id,
+        id: row.guidance_id, // deduplicate by canonical guidance id
         title: row.document_title,
-        category: 'Knowledge base',
-        content: row.content,
-        source: 'Uploaded guidance document',
-        last_verified: null,
+        category: row.guidance_category || 'Knowledge base',
+        content: row.content, // keep the specific chunk matched by the vector
+        source: row.guidance_source || 'Uploaded document',
+        last_verified: row.last_verified,
         score: Math.round(row.similarity * 100),
       }))
     }

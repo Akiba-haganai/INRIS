@@ -1,0 +1,1 @@
+alter table public.case_analysis add column if not exists relevant_guidance_ids uuid[] not null default '{}';

@@ -25,6 +25,7 @@ export interface AnalysisRow {
   issues: string[]
   missing_information: string[]
   relevant_guidance: string[]
+  relevant_guidance_ids: string[]
   suggested_action: string
   confidence: number
   human_review_required: boolean
@@ -53,7 +54,7 @@ export interface CaseStats {
 }
 
 const ANALYSIS_COLUMNS =
-  'id, case_id, case_type, summary, issues, missing_information, relevant_guidance, suggested_action, confidence, human_review_required, created_at'
+  'id, case_id, case_type, summary, issues, missing_information, relevant_guidance, relevant_guidance_ids, suggested_action, confidence, human_review_required, created_at'
 
 // ---------- Queries --------------------------------------------------
 export async function listCases(
@@ -155,6 +156,7 @@ export async function saveAnalysis(
       issues: output.key_issues,
       missing_information: output.missing_information,
       relevant_guidance: output.relevant_guidance,
+      relevant_guidance_ids: output.relevant_guidance_ids || [],
       suggested_action: output.suggested_next_step,
       confidence: output.confidence,
       human_review_required: output.human_review_required,

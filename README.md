@@ -56,7 +56,6 @@ cp .env.local.example .env.local
 #   Open Supabase → SQL Editor, and run in order:
 #     supabase/migrations/001_initial_schema.sql
 #     supabase/migrations/002_case_analysis_review.sql
-#     scripts/seed.sql
 
 # 4. Run
 npm run dev

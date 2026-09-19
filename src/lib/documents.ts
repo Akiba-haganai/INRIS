@@ -83,3 +83,33 @@ export async function findDocumentBySha(
     .maybeSingle()
   return (data as DocumentRow) ?? null
 }
+
+export interface GuidanceRecord {
+  id: string
+  title: string
+  category: string
+  status: 'demo' | 'draft' | 'approved' | 'retired'
+  last_verified: string | null
+  document_id: string | null
+  created_at: string
+}
+
+export async function listGuidance(): Promise<GuidanceRecord[]> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from('guidance')
+    .select('id, title, category, status, last_verified, document_id, created_at')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`listGuidance failed: ${error.message}`)
+  return data as GuidanceRecord[]
+}
+
+export async function updateGuidanceStatus(id: string, status: string): Promise<void> {
+  const supabase = createAdminClient()
+  const payload: any = { status }
+  if (status === 'approved') {
+    payload.last_verified = new Date().toISOString()
+  }
+  const { error } = await supabase.from('guidance').update(payload).eq('id', id)
+  if (error) throw new Error(`updateGuidanceStatus failed: ${error.message}`)
+}

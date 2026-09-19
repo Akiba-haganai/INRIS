@@ -1,12 +1,14 @@
-import { listDocuments } from '@/lib/documents'
+import { listDocuments, listGuidance } from '@/lib/documents'
 import { DocumentUpload } from '@/components/staff/DocumentUpload'
 import { DocumentList } from '@/components/staff/DocumentList'
+import { GuidanceList } from '@/components/staff/GuidanceList'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 
 export const dynamic = 'force-dynamic'
 
 export default async function KnowledgePage() {
   const documents = await listDocuments()
+  const guidance = await listGuidance()
 
   return (
     <div className="space-y-6">
@@ -33,7 +35,17 @@ export default async function KnowledgePage() {
 
       <Card>
         <CardHeader
-          title="Indexed documents"
+          title="Guidance Library"
+          subtitle={`${guidance.length} ${guidance.length === 1 ? 'record' : 'records'}`}
+        />
+        <CardBody>
+          <GuidanceList guidance={guidance} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Raw Uploaded Documents"
           subtitle={`${documents.length} ${documents.length === 1 ? 'document' : 'documents'}`}
         />
         <CardBody>

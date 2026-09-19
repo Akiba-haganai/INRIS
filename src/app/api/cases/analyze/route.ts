@@ -102,11 +102,18 @@ export async function POST(req: Request) {
       )
     }
 
-    // ---- persist ------------------------------------------------------
-    // FIX: saveAnalysis() previously dropped case_type and
-    // relevant_guidance on the floor -- they were validated above and
-    // then never written anywhere, even though FR-05 explicitly asks
-    // for both. See 002_case_analysis_review.sql for the new columns.
+    // Map the string titles returned by the LLM back to the actual UUIDs
+    // of the retrieved guidance so we have a strong relational audit trail.
+    const relevantIds = validated.data.relevant_guidance
+      .map(title => {
+        // Find exact or partial match in the retrieved guidance array
+        const lowerTitle = title.toLowerCase()
+        return guidance.find(g => g.title.toLowerCase().includes(lowerTitle))?.id
+      })
+      .filter(Boolean) as string[]
+
+    validated.data.relevant_guidance_ids = relevantIds
+
     const analysis = await saveAnalysis(case_id, validated.data)
 
     // FIX: this used to hard-code `process.env.AI_MODEL || 'deepseek-chat'`

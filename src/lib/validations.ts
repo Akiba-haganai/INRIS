@@ -32,6 +32,7 @@ export const caseAnalysisOutputSchema = z.object({
   key_issues: z.array(z.string()),
   missing_information: z.array(z.string()),
   relevant_guidance: z.array(z.string()),
+  relevant_guidance_ids: z.array(z.string()).optional(),
   suggested_next_step: z.string(),
   human_review_required: z.boolean(),
   confidence: z.number().min(0).max(1),
